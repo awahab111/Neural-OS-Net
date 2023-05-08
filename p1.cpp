@@ -28,7 +28,7 @@ int count_threads()
     //counting the number of lines
     while(getline(fin, line))
     {   
-        if(line == "") break;
+        if(line == "\r") break;
         num_of_threads++;
     }
     threadCountSeekg = fin.tellg();
@@ -50,10 +50,6 @@ int count_weights()
     {
         num_of_weights++;
     }
-    //last value in the line
-    num_of_weights++;
-
-
     fin.close();
     return num_of_weights;
 }
@@ -70,10 +66,6 @@ void read_weights(vector<double> &weights)
         {
             weights.push_back(stod(temp));
         }
-        //adding last value to the weights
-        getline(iss, temp, '\n');
-        weights.push_back(stod(temp));
-
         //updating the seekg value for the next thread
         WeightsSeekg = fin.tellg();
         fin.close();
@@ -99,21 +91,42 @@ void* thread_func(void* arg)
     cout << "Thread " << pthread_self() << " output:" << endl;
     for(int i=0; i<weights.size(); i++)
     {
-        cout << weights[i] << " ";
+        cout << output[i] << " ";
     }
     cout << endl;
     pthread_exit(NULL);
 }
 
-int main(int process_num = 0, int seekg = 0, int numOfInputs = 0, char** argv = NULL)
+int main(int argc, char* argv[])
 {
+   int process_num = 0;
+   int seekg = 0;
+   int numOfInputs = 2;
+
+   if (argc > 1) {
+      process_num = atoi(argv[1]);
+   }
+   if (argc > 2) {
+      seekg = atoi(argv[2]);
+   }
+   if (argc > 3) {
+      numOfInputs = atoi(argv[3]);
+   }
+
+   cout << "process_num = " << process_num << endl;
+   cout << "seekg = " << seekg << endl;
+   cout << "numOfInputs = " << numOfInputs << endl;
+
+
+
+
     cout << "Process number: " << process_num << endl;
 
     WeightsSeekg = threadCountSeekg = seekg;
     sem_init(&sem, 0, 1);
     const int NUM_OF_THREADS = count_threads();
     const int NUM_OF_WEIGHTS = count_weights();
-    const int outputSize = NUM_OF_WEIGHTS * NUM_OF_THREADS;
+    const int outputSize = NUM_OF_WEIGHTS;
     output.resize(outputSize);
 
     cout << "Number of threads: " << NUM_OF_THREADS << endl;
@@ -122,10 +135,9 @@ int main(int process_num = 0, int seekg = 0, int numOfInputs = 0, char** argv = 
     vector<double> inputs;
     if(process_num == 0)
     {
-        cout << "aaaaaaaaaaaaaaaa" << endl;
         double temp = 0.0;
         cout << "Enter inputs:" << endl;
-        for(int i=0; i<NUM_OF_THREADS; i++)
+        for(int i=0; i<numOfInputs; i++)
         {
         // inputs.push_back(stod(argv[i+1]));
             cin >> temp;
