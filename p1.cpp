@@ -16,7 +16,13 @@ sem_t sem;
 int threadCountSeekg = 0;
 int WeightsSeekg = 0;
 bool finalLayer = false;
-vector<double> output;
+
+struct Neuron
+{
+    int thread_number;
+    double inputs;
+    double* output;
+};
 
 int count_threads()
 {
@@ -28,7 +34,7 @@ int count_threads()
     //counting the number of lines
     while(getline(fin, line))
     {   
-        if(line == "\r") break;
+        if(line == "") break;
         num_of_threads++;
     }
     threadCountSeekg = fin.tellg();
@@ -78,7 +84,7 @@ void read_weights(vector<double> &weights)
 void* thread_func(void* arg)
 {
     //add the linear combination of inputs and weights
-    double input = *(double*)arg;
+    Neuron neuron = *(Neuron*)arg;
     vector<double> weights;
     sem_wait(&sem);
     read_weights(weights);
@@ -86,12 +92,12 @@ void* thread_func(void* arg)
 
     for(int i=0; i<weights.size(); i++)
     {
-        output[i] += input * weights[i];
+        neuron.output[i] = neuron.inputs * weights[i];
     }
     cout << "Thread " << pthread_self() << " output:" << endl;
     for(int i=0; i<weights.size(); i++)
     {
-        cout << output[i] << " ";
+        cout << neuron.output[i] << " ";
     }
     cout << endl;
     pthread_exit(NULL);
@@ -109,7 +115,7 @@ int main(int argc, char* argv[])
    if (argc > 2) {
       seekg = atoi(argv[2]);
    }
-   if (argc > 3) {
+   if (argc >= 3) {
       numOfInputs = atoi(argv[3]);
    }
 
@@ -127,48 +133,71 @@ int main(int argc, char* argv[])
     const int NUM_OF_THREADS = count_threads();
     const int NUM_OF_WEIGHTS = count_weights();
     const int outputSize = NUM_OF_WEIGHTS;
-    output.resize(outputSize);
+    Neuron *neurons = new Neuron[NUM_OF_THREADS];
+    // output = new int*[NUM_OF_THREADS];
+    // for(int i=0; i<NUM_OF_THREADS; i++){
+    //     output[i] = new int[NUM_OF_WEIGHTS];
+    // }
 
     cout << "Number of threads: " << NUM_OF_THREADS << endl;
 
     //enter inputs
     vector<double> inputs;
-    if(process_num == 0)
-    {
+    if(process_num == 0){
         double temp = 0.0;
         cout << "Enter inputs:" << endl;
-        for(int i=0; i<numOfInputs; i++)
-        {
-        // inputs.push_back(stod(argv[i+1]));
+        for(int i=0; i< NUM_OF_THREADS; i++){
             cin >> temp;
             inputs.push_back(temp);
         }
     }
     else
     {
+        cout << "reading" << endl;
         //read from pipe
+        inputs.resize(numOfInputs);
         int fd = open("pipe", O_RDONLY);
-        read(fd, &inputs, numOfInputs*sizeof(double));
+        Neuron nigga;
+        read(fd, &nigga.inputs, sizeof(double));
+        cout << nigga.inputs << endl;
+        // read(fd, &inputs, numOfInputs*sizeof(double));
         close(fd);
     }
 
     pthread_t *threads = new pthread_t[NUM_OF_THREADS];
-    for(int i=0; i<NUM_OF_THREADS; i++)
-    {
-        pthread_create(&threads[i], NULL, thread_func, &inputs[i]);
+    for(int i=0; i<NUM_OF_THREADS; i++){
+        neurons[i].thread_number = i;
+        neurons[i].inputs = inputs[i];
+        neurons[i].output = new double[NUM_OF_WEIGHTS];
+        pthread_create(&threads[i], NULL, thread_func, (void*) (&neurons[i]));
     }
     for(int i=0; i<NUM_OF_THREADS; i++)
     {
         pthread_join(threads[i], NULL);
     }
 
+    WeightsSeekg = threadCountSeekg;
+
+
     mkfifo("pipe", 0666);
+    if(fork() == 0){
+        if(!finalLayer)
+        execlp("./p1", "./p1", to_string(++process_num).c_str(), to_string(WeightsSeekg).c_str(), to_string(outputSize).c_str(),  NULL);
+    }
+    for (int i = 0; i < NUM_OF_THREADS; i++)
+    {
+        neurons[i].inputs += neurons[i].output[i];
+    }
     int fd = open("pipe", O_WRONLY);
-    write(fd, &output, output.size()*sizeof(double));
+    cout << neurons[0].inputs << endl;
+    for (int i = 0; i < NUM_OF_THREADS; i++)
+    {
+        write(fd, &neurons[i].inputs, sizeof(double));
+    }
+    // write(fd, &neurons[0].inputs, sizeof(double));
+    // write(fd, &neurons[].inputs, sizeof(double));
     close(fd);
 
-    WeightsSeekg = threadCountSeekg;
-    //run the same program again
-    if(!finalLayer)
-    execlp("./p1", "./p1", process_num++, WeightsSeekg, outputSize,  NULL);
+    pthread_exit(NULL);
+
 }
