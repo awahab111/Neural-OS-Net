@@ -22,6 +22,7 @@ struct Neuron
     int thread_number;
     double inputs;
     double* output;
+    double result;
 };
 
 int count_threads()
@@ -84,11 +85,10 @@ void read_weights(vector<double> &weights)
 void* thread_func(void* arg)
 {
     //add the linear combination of inputs and weights
+    sem_wait(&sem);
     Neuron neuron = *(Neuron*)arg;
     vector<double> weights;
-    sem_wait(&sem);
     read_weights(weights);
-    sem_post(&sem);
 
     for(int i=0; i<weights.size(); i++)
     {
@@ -100,6 +100,7 @@ void* thread_func(void* arg)
         cout << neuron.output[i] << " ";
     }
     cout << endl;
+    sem_post(&sem);
     pthread_exit(NULL);
 }
 
@@ -119,13 +120,6 @@ int main(int argc, char* argv[])
       numOfInputs = atoi(argv[3]);
    }
 
-   cout << "process_num = " << process_num << endl;
-   cout << "seekg = " << seekg << endl;
-   cout << "numOfInputs = " << numOfInputs << endl;
-
-
-
-
     cout << "Process number: " << process_num << endl;
 
     WeightsSeekg = threadCountSeekg = seekg;
@@ -134,10 +128,7 @@ int main(int argc, char* argv[])
     const int NUM_OF_WEIGHTS = count_weights();
     const int outputSize = NUM_OF_WEIGHTS;
     Neuron *neurons = new Neuron[NUM_OF_THREADS];
-    // output = new int*[NUM_OF_THREADS];
-    // for(int i=0; i<NUM_OF_THREADS; i++){
-    //     output[i] = new int[NUM_OF_WEIGHTS];
-    // }
+    double * result= new double[NUM_OF_WEIGHTS]{0.0};
 
     cout << "Number of threads: " << NUM_OF_THREADS << endl;
 
@@ -151,15 +142,22 @@ int main(int argc, char* argv[])
             inputs.push_back(temp);
         }
     }
+
     else
     {
         cout << "reading" << endl;
         //read from pipe
         inputs.resize(numOfInputs);
         int fd = open("pipe", O_RDONLY);
-        Neuron nigga;
-        read(fd, &nigga.inputs, sizeof(double));
-        cout << nigga.inputs << endl;
+        for (int i = 0; i < NUM_OF_THREADS; i++)
+        {
+            sleep(1);
+            double nigga;
+            read(fd, &nigga, sizeof(double));
+            inputs[i] = nigga;
+            cout << nigga << endl;
+        }
+        
         // read(fd, &inputs, numOfInputs*sizeof(double));
         close(fd);
     }
@@ -170,32 +168,30 @@ int main(int argc, char* argv[])
         neurons[i].inputs = inputs[i];
         neurons[i].output = new double[NUM_OF_WEIGHTS];
         pthread_create(&threads[i], NULL, thread_func, (void*) (&neurons[i]));
-    }
-    for(int i=0; i<NUM_OF_THREADS; i++)
-    {
         pthread_join(threads[i], NULL);
     }
 
     WeightsSeekg = threadCountSeekg;
 
 
-    mkfifo("pipe", 0666);
+    for (int j = 0; j < NUM_OF_WEIGHTS; j++){
+        for (int i = 0; i < NUM_OF_THREADS; i++){
+            result[j] += neurons[i].output[j];
+        }
+        // cout << result[j] << endl;
+    }
+    
+    
     if(fork() == 0){
         if(!finalLayer)
         execlp("./p1", "./p1", to_string(++process_num).c_str(), to_string(WeightsSeekg).c_str(), to_string(outputSize).c_str(),  NULL);
     }
-    for (int i = 0; i < NUM_OF_THREADS; i++)
-    {
-        neurons[i].inputs += neurons[i].output[i];
-    }
+    mkfifo("pipe", 0666);
     int fd = open("pipe", O_WRONLY);
-    cout << neurons[0].inputs << endl;
-    for (int i = 0; i < NUM_OF_THREADS; i++)
+    for (int i = 0; i < NUM_OF_WEIGHTS; i++)
     {
-        write(fd, &neurons[i].inputs, sizeof(double));
-    }
-    // write(fd, &neurons[0].inputs, sizeof(double));
-    // write(fd, &neurons[].inputs, sizeof(double));
+        write(fd, &result[i], sizeof(double));
+    } 
     close(fd);
 
     pthread_exit(NULL);
