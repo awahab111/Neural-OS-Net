@@ -152,10 +152,10 @@ int main(int argc, char* argv[])
         for (int i = 0; i < NUM_OF_THREADS; i++)
         {
             sleep(1);
-            double nigga;
-            read(fd, &nigga, sizeof(double));
-            inputs[i] = nigga;
-            cout << nigga << endl;
+            double thread_input;
+            read(fd, &thread_input, sizeof(double));
+            inputs[i] = thread_input;
+            cout << thread_input << endl;
         }
         
         // read(fd, &inputs, numOfInputs*sizeof(double));
