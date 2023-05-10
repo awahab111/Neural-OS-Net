@@ -101,6 +101,12 @@ void *thread_func(void *arg)
     pthread_exit(NULL);
 }
 
+void generate_input(double &output, double new_inputs[2])
+{
+    new_inputs[0] = ((output*output) + output + 1)/2;
+    new_inputs[1] = ((output*output) - output)/2;
+}
+
 int main(int argc, char *argv[])
 {
     int process_num = 0;
@@ -205,7 +211,7 @@ int main(int argc, char *argv[])
         else //if final process
         {
           //  mkfifo("output_pipe", 0666);
-            pthread_exit(NULL);
+            exit(0);
         }
     }
     if (!finalLayer)
@@ -222,15 +228,26 @@ int main(int argc, char *argv[])
     if (finalLayer)
     {
         cout << "-----------Final Layer---------" << endl;
+        double output;
+        for (int i = 0; i < NUM_OF_WEIGHTS; i++)
+        {
+            output += neurons[i].output[i];
+        }
+        cout << "Final Output: " << output << endl;
+
+        double new_inputs[2];
+        generate_input(output, new_inputs);
         //close reading end
         close(reading_end);
-        double aa = 6;
-        if(write(writing_end, &aa, sizeof(double)))
+        for(int i = 0; i < 2; i++)
         {
-            cout << "Successfully wrote to pipe" << endl;
-        }
-        else{
-            cout << "Error writing to pipe" << endl;
+            if(write(writing_end, &new_inputs[i], sizeof(double)))
+            {
+                cout << "Successfully wrote to pipe" << endl;
+            }
+            else{
+                cout << "Error writing to pipe" << endl;
+            }
         }
         close(writing_end);
 
@@ -238,41 +255,33 @@ int main(int argc, char *argv[])
     if (!finalLayer)
     {
         //receiving from front process
-        double ooga = -1;
+        double new_inputs[2];
         close(fd[1]);
-        if(read(fd[0], &ooga, sizeof(double)))
+        for(int i = 0; i < 2; i++)
         {
-            cout << "Output " << ooga << " from P " << process_num << endl;
-        }
-        else
-        {
-            cout << "Error reading from pipe" << endl;
+            if(read(fd[0], &new_inputs[i], sizeof(double)))
+            {
+                cout << "Input " << new_inputs[i] << " from P " << process_num << endl;
+            }
+            else
+            {
+                cout << "Error reading from pipe" << endl;
+            }
         }
 
         close(fd[0]);
-
         //sending to back process
         if(process_num != 0)
         {
             close(reading_end);
-            write(writing_end, &ooga, sizeof(double));
+            for(int i = 0; i < 2; i++)
+            {            
+                write(writing_end, &new_inputs[i], sizeof(double));
+            }
             close(writing_end);
         }
     }
-    // if (process_num != 1)
-    // {
-    //     int fd_1 = open("output_pipe", O_WRONLY);
-    //     write(fd_1, &output, sizeof(double));
-    //     close(fd_1);
-    // }
-    // else
-    // {
-    //     int fd_1 = open("output_pipe", O_RDONLY);
-    //     // cout << "Process " << process_num<< endl ;
-    //     read(fd_1, &output, sizeof(double));
-    //     cout << "Output " << output << " from P " << process_num << endl;
-    //     close(fd_1);
-    // }
-
-    // pthread_exit(NULL);
+    
+    return 0;
+   
 }
