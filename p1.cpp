@@ -78,9 +78,6 @@ void read_weights(vector<double> &weights)
         fin.close();
 }
 
-//--------------
-//PROBLEM: only one thread is able to read the weights at a time
-//----------------
 
 void* thread_func(void* arg)
 {
@@ -103,6 +100,8 @@ void* thread_func(void* arg)
     sem_post(&sem);
     pthread_exit(NULL);
 }
+
+
 
 int main(int argc, char* argv[])
 {
@@ -184,16 +183,41 @@ int main(int argc, char* argv[])
     
     if(fork() == 0){
         if(!finalLayer)
-        execlp("./p1", "./p1", to_string(++process_num).c_str(), to_string(WeightsSeekg).c_str(), to_string(outputSize).c_str(),  NULL);
+            execlp("./p1", "./p1", to_string(++process_num).c_str(), to_string(WeightsSeekg).c_str(), to_string(outputSize).c_str(),  NULL);
     }
-    mkfifo("pipe", 0666);
-    int fd = open("pipe", O_WRONLY);
-    for (int i = 0; i < NUM_OF_WEIGHTS; i++)
+    if (!finalLayer)
     {
-        write(fd, &result[i], sizeof(double));
-    } 
-    close(fd);
-
+        mkfifo("pipe", 0666);
+        int fd = open("pipe", O_WRONLY);
+        for (int i = 0; i < NUM_OF_WEIGHTS; i++)
+        {
+            write(fd, &result[i], sizeof(double));
+        } 
+        close(fd);
+    }
+    double output = 0;
+    mkfifo("output_pipe", 0666);
+    if (finalLayer)
+    {
+        int fd_1 = open("output_pipe", O_WRONLY);
+        double amogus = 5;
+        write(fd_1, &amogus, sizeof(double));
+        
+    }
+    // while (output == 0 && !finalLayer){
+        int fd_1 = open("output_pipe", O_RDONLY);
+        // cout << "Process " << process_num<< endl ;
+        read(fd_1, &output, sizeof(double));
+        cout << "Output" << output << " from P " << process_num << endl;
+    // }
+    if (process_num !=1)
+    {
+        int fd_1 = open("output_pipe", O_WRONLY);
+        write(fd_1, &output, sizeof(double));
+    }
+    
+    
+    
     pthread_exit(NULL);
 
 }
