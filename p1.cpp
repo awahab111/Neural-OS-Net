@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
         int fd = open("pipe", O_RDONLY);
         for (int i = 0; i < NUM_OF_THREADS; i++)
         {
-            sleep(1);
+            // sleep(1);
             double thread_input;
             read(fd, &thread_input, sizeof(double));
             inputs[i] = thread_input;
@@ -208,16 +208,26 @@ int main(int argc, char* argv[])
         int fd_1 = open("output_pipe", O_RDONLY);
         // cout << "Process " << process_num<< endl ;
         read(fd_1, &output, sizeof(double));
-        cout << "Output" << output << " from P " << process_num << endl;
+        cout << "Output " << output << " from P " << process_num << endl;
+        close(fd_1);
     }
     if (process_num !=1)
     {
         int fd_1 = open("output_pipe", O_WRONLY);
         write(fd_1, &output, sizeof(double));
+        close(fd_1);
     }
+    else{
+        int fd_1 = open("output_pipe", O_RDONLY);
+        // cout << "Process " << process_num<< endl ;
+        read(fd_1, &output, sizeof(double));
+        cout << "Output " << output << " from P " << process_num << endl;
+        close(fd_1);
+    }
+
     
     
     
-    pthread_exit(NULL);
+    // pthread_exit(NULL);
 
 }
