@@ -202,14 +202,14 @@ int main(int argc, char* argv[])
         int fd_1 = open("output_pipe", O_WRONLY);
         double amogus = 5;
         write(fd_1, &amogus, sizeof(double));
-        
+
     }
-    // while (output == 0 && !finalLayer){
+    if (!finalLayer){
         int fd_1 = open("output_pipe", O_RDONLY);
         // cout << "Process " << process_num<< endl ;
         read(fd_1, &output, sizeof(double));
         cout << "Output" << output << " from P " << process_num << endl;
-    // }
+    }
     if (process_num !=1)
     {
         int fd_1 = open("output_pipe", O_WRONLY);
