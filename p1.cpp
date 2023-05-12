@@ -66,12 +66,15 @@ int count_weights()
     return num_of_weights;
 }
 
-void read_weights(vector<double> &weights)
+void read_weights(vector<double> &weights, int &thread_number)
 {
     string line, temp;
     ifstream fin("weights_and_inputs.txt");
 
     fin.seekg(WeightsSeekg);
+    for(int i = 0; i < thread_number; i++)
+        getline(fin, line); //skipping lines
+        
     getline(fin, line);
     stringstream iss(line);
     while (getline(iss, temp, ','))
@@ -79,7 +82,6 @@ void read_weights(vector<double> &weights)
         weights.push_back(stod(temp));
     }
     // updating the seekg value for the next thread
-    WeightsSeekg = fin.tellg();
     fin.close();
 }
 
@@ -89,7 +91,7 @@ void *thread_func(void *arg)
     sem_wait(&sem);
     Neuron neuron = *(Neuron *)arg;
     vector<double> weights;
-    read_weights(weights);
+    read_weights(weights, neuron.thread_number);
 
     for (int i = 0; i < weights.size(); i++)
     {
@@ -220,7 +222,7 @@ double *process_inputs(const int &NUM_OF_THREADS, const int &NUM_OF_WEIGHTS, vec
         neurons[i].inputs = inputs[i];
         neurons[i].output = new double[NUM_OF_WEIGHTS];
         pthread_create(&threads[i], NULL, thread_func, (void *)(&neurons[i]));
-        sleep(1);
+        //sleep(1);
     }
 
     pthread_t completion_thread;
