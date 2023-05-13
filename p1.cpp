@@ -10,10 +10,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <mutex>
 
 #define NUM_OF_INPUTS 2
 using namespace std;
 
+mutex mtx;
 sem_t sem;
 sem_t completion_sem;
 int threadCountSeekg = 0;
@@ -33,7 +36,7 @@ int count_threads()
 {
     int num_of_threads = 0;
     string line;
-    ifstream fin("weights_and_inputs.txt");
+    ifstream fin("weights.txt");
     fin.seekg(threadCountSeekg);
 
     // counting the number of lines
@@ -54,7 +57,7 @@ int count_weights()
 {
     int num_of_weights = 0;
     string line;
-    ifstream fin("weights_and_inputs.txt");
+    ifstream fin("weights.txt");
     fin.seekg(WeightsSeekg);
     getline(fin, line);
     stringstream iss(line);
@@ -69,7 +72,7 @@ int count_weights()
 void read_weights(vector<double> &weights, int &thread_number)
 {
     string line, temp;
-    ifstream fin("weights_and_inputs.txt");
+    ifstream fin("weights.txt");
 
     fin.seekg(WeightsSeekg);
     for(int i = 0; i < thread_number; i++)
@@ -97,11 +100,13 @@ void *thread_func(void *arg)
     {
         neuron.output[i] = neuron.inputs * weights[i];
     }
+    mtx.lock();
     cout << "Thread " << neuron.thread_number << " output: " << endl;
     for (int i = 0; i < weights.size(); i++)
     {
         cout << neuron.output[i] << " ";
     }
+    mtx.unlock();
     cout << endl;
     sem_post(&sem);
     worker_threads++;
@@ -137,13 +142,14 @@ void writePipeInput(const int &NUM_OF_WEIGHTS, double *result, int fd_2[2])
 
 double combineFinalOutput(const int &NUM_OF_WEIGHTS, double *result)
 {
-    cout << "-----------Final Layer---------" << endl;
+    cout << "\n-----------Final Layer---------" << endl;
     double output = 0;
     for (int i = 0; i < NUM_OF_WEIGHTS; i++)
     {
         output += result[i];
     }
     cout << "Final Output: " << output << endl;
+    cout << "--------------------------------" << endl << endl;
     return output;
 }
 
@@ -161,9 +167,7 @@ double *final_layer(const int &NUM_OF_WEIGHTS, int &reading_end_b, int &writing_
         close(reading_end_b);
         for (int i = 0; i < 2; i++)
         {
-            if (write(writing_end_b, &new_inputs[i], sizeof(double)))
-                cout << "Successfully wrote to pipe" << endl;
-            else
+            if (write(writing_end_b, &new_inputs[i], sizeof(double))  == -1)
                 cout << "Error writing to pipe" << endl;
         }
         close(writing_end_b);
@@ -183,10 +187,12 @@ double *hidden_layer(const int &process_num, int fd_1[2], int &reading_end_b, in
         for (int i = 0; i < 2; i++)
         {
             if (read(fd_1[0], &new_inputs[i], sizeof(double)))
-                cout << "Input " << new_inputs[i] << " from P " << process_num << endl;
+                cout << "New Input " << i+1 << ": " << new_inputs[i] << "\nCurrent process: " << process_num << "\nReceived from: " << process_num + 1 << endl << endl;
             else
                 cout << "Error reading from pipe" << endl;
         }
+        cout << "--------------------------------" << endl;
+
         close(fd_1[0]);
 
         // sending to back process
@@ -207,7 +213,6 @@ void* completionFunc(void *arg)
 {
     int NUM_OF_THREADS = *(int *)arg;
     while(worker_threads != NUM_OF_THREADS);
-    cout << "worker_threads: " << worker_threads << endl;
     sem_post(&completion_sem);
     pthread_exit(NULL);
 }
@@ -286,16 +291,16 @@ int main(int argc, char *argv[])
         write_end_f = atoi(argv[7]);
     }
 
-    cout << "Process number: " << process_num << endl;
+    cout << "\n============== Process number: " << process_num << endl;
 
     WeightsSeekg = threadCountSeekg = seekg;
     const int NUM_OF_THREADS = count_threads();
-    sem_init(&sem, 0, 1);
+    sem_init(&sem, 0, NUM_OF_THREADS);
     const int NUM_OF_WEIGHTS = count_weights();
     const int outputSize = NUM_OF_WEIGHTS;
     double *result = new double[NUM_OF_WEIGHTS]{0.0};
 
-    cout << "Number of threads: " << NUM_OF_THREADS << endl;
+    cout << "============== Number of threads: " << NUM_OF_THREADS << endl;
 
     // enter inputs
     vector<double> inputs;
@@ -348,6 +353,7 @@ int main(int argc, char *argv[])
         new_inputs = hidden_layer(process_num, fd_1, reading_end_b, writing_end_b);
 
     // ---- re-front propagation ----
+
     if (process_num == 0)
     {
         // delete inputs
@@ -368,16 +374,17 @@ int main(int argc, char *argv[])
         {
             inputs.pop_back();
         }
-        cout << "-------------Process number: " << process_num << " is now readying." << endl;
         readPipeInput(NUM_OF_THREADS, numOfInputs, inputs, read_end_f);
         close(read_end_f);
-        cout << "~~~~~~~~~~~~~Process number: " << process_num << " has now read" << endl;
     }
     delete[] result;
     WeightsSeekg = seekg;
+
+    cout << "\n=============== Process number: " << process_num << endl;
+    cout << "============== Number of threads: " << NUM_OF_THREADS << endl;
     result = process_inputs(NUM_OF_THREADS, NUM_OF_WEIGHTS, inputs);
 
-    cout << "=============== Process number: " << process_num << endl;
+
 
     writePipeInput(NUM_OF_WEIGHTS, result, fd_2);
     close(fd_2[1]);
@@ -386,6 +393,6 @@ int main(int argc, char *argv[])
     {
         combineFinalOutput(NUM_OF_WEIGHTS, result);
     }
-    cout << "Process number: " << process_num << " is now exiting." << endl;
+    cout << "(---- Process number: " << process_num << " is now exiting ----)" << endl;
     return 0;
 }
